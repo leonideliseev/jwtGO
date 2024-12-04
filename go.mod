@@ -3,8 +3,6 @@ module github.com/leonideliseev/jwtGO
 go 1.23.2
 
 require (
-	github.com/dgrijalva/jwt-go v3.2.0+incompatible
-	github.com/gorilla/mux v1.8.1
 	github.com/jackc/pgx/v5 v5.7.1
 	golang.org/x/crypto v0.29.0
 )
@@ -25,7 +23,6 @@ require (
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.7 // indirect
-	github.com/kr/text v0.2.0 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect

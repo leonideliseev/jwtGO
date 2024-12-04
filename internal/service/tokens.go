@@ -2,11 +2,13 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt"
 	"github.com/leonideliseev/jwtGO/internal/repository"
+	"github.com/leonideliseev/jwtGO/models"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -23,8 +25,12 @@ type TokensData struct {
 	IP      string `json:"ip"`
 }
 
-type TokensClaims struct {
+type TokenAccessClaims struct {
 	IP      string `json:"ip"`
+	jwt.StandardClaims
+}
+
+type TokenRefreshClaims struct {
 	jwt.StandardClaims
 }
 
@@ -39,7 +45,7 @@ func NewTokensService(repo repository.RefreshToken) *TokensService {
 }
 
 func (s *TokensService) GenerateAccessToken(ctx context.Context, td *TokensData) (string, error) {
-	claims := &TokensClaims{
+	claims := &TokenAccessClaims{
 		IP:     td.IP,
 		StandardClaims: jwt.StandardClaims{
 			Subject: td.UserID,
@@ -61,24 +67,33 @@ func (s *TokensService) GenerateRefreshToken(ctx context.Context, td *TokensData
 		return "", nil
 	}
 
-	_, err = hashRefreshToken(refreshToken) //TODO: hashedRefreshToken
+	hashedRefreshToken, err := hashRefreshToken(refreshToken) //TODO: проверить хэш-функцию
 	if err != nil {
 		return "", err
 	}
 
-	ok, err := s.repo.Get(ctx, td.UserID) // TODO: возможно стоит добавить ошибку NotFound и использовать проверку через неё
-	if err != nil {
-		return "", err
+	data := &models.Refresh{
+		UserID: td.UserID,
+		IP: td.IP,
+		RefreshTokenHash: hashedRefreshToken,
 	}
 
-	// TODO: заменить на хэш
-	if ok == "" {
-		err = s.repo.Update(ctx, refreshToken, td.UserID)
-	} else {
-		err = s.repo.Create(ctx, refreshToken, td.UserID)
+	_, err = s.repo.Get(ctx, td.UserID)
+	var errRepo error
+	switch {
+	case errors.Is(err, repository.ErrNotFound):
+		errRepo = s.repo.Create(ctx, data)
+	case err == nil:
+		errRepo = s.repo.Update(ctx, data)
+	default:
+		return "", nil
 	}
-	if err != nil {
-		return "", err
+	if errRepo != nil {
+		if errors.Is(errRepo, repository.ErrNotFound) {
+			return "", ErrConcurency
+		}
+
+		return "", nil
 	}
 
 	return refreshToken, nil
@@ -95,8 +110,18 @@ func (s *TokensService) UpdateRefreshToken(ctx context.Context, td *TokensData) 
 		return "", err
 	}
 
-	err = s.repo.Update(ctx, string(hashedRefreshToken), td.UserID)
+	data := &models.Refresh{
+		UserID: td.UserID,
+		IP: td.IP,
+		RefreshTokenHash: hashedRefreshToken,
+	}
+
+	err = s.repo.Update(ctx, data)
 	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return "", HasNotToken
+		}
+
 		return "", err
 	}
 
@@ -109,7 +134,7 @@ func (s *TokensService) CheckRefreshToken(ctx context.Context, userID, refreshTo
 		return err
 	}
 
-	err = verifyRefreshToken(refreshToken, storedHash) // TODO: изменить проверку
+	err = verifyRefreshToken(refreshToken, storedHash)
 	if err != nil {
 		return fmt.Errorf("Incorrect refresh token")
 	}
@@ -117,10 +142,12 @@ func (s *TokensService) CheckRefreshToken(ctx context.Context, userID, refreshTo
 	return nil
 }
 
-func verifyRefreshToken(refreshToken string, storedHash string) error {
-	signedToken := fmt.Sprintf("%s.%s", refreshToken, refreshSecret)
+// TODO: проверка должна быть на равенство с хэшем и изменился ли ip
+func verifyRefreshToken(refreshToken string, storedHash *models.Refresh) error {
+	return nil
+	/*signedToken := fmt.Sprintf("%s.%s", refreshToken, refreshSecret)
 
-	return bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(signedToken))
+	return bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(signedToken))*/
 }
 
 func hashRefreshToken(token string) (string, error) {
@@ -137,8 +164,7 @@ func hashRefreshToken(token string) (string, error) {
 }
 
 func generateRefreshToken(td *TokensData) (string, error) {
-	claims := &TokensClaims{
-		IP:      td.IP,
+	claims := &TokenRefreshClaims{
 		StandardClaims: jwt.StandardClaims{
 			Subject: td.UserID,
 			ExpiresAt: time.Now().Add(refreshTTL).Unix(),

@@ -4,13 +4,13 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/leonideliseev/jwtGO/models"
 )
 
 type RefreshToken interface {
-	Create(ctx context.Context, token, userID string) error
-	Get(ctx context.Context, userID string) (string, error)
-	Update(ctx context.Context, token, userID string) error
-	// CheckUser(ctx context.Context, userID string) (bool, error)
+	Create(ctx context.Context, refresh *models.Refresh) error
+	Update(ctx context.Context, refresh *models.Refresh) error
+	Get(ctx context.Context, userID string) (*models.Refresh, error)
 }
 
 type Repository struct {
