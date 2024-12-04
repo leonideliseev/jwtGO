@@ -1,39 +1,46 @@
 package handler
 
 import (
+	"math/rand"
 	"net"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/leonideliseev/jwtGO/internal/service"
 )
 
-type TokenDetails struct {
+type TokenResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 }
 
 func (h *Handler) createTokens(c *gin.Context) {
 	userID := c.Query("user_id")
-	if userID == "" {
-		newErrorResponse(c, http.StatusBadRequest, "missing user id")
+	if !isValidUUID(c, userID) {
 		return
 	}
-	ip := getIP(c)
 
-	accessToken, err := h.serv.GenerateAccessToken(c, userID, ip)
+	tokensData := &service.TokensData{
+		UserID: userID,
+		TokenID: generateTokenID(),
+		IP: getIP(c),
+	}
+
+	accessToken, err := h.serv.GenerateAccessToken(c, tokensData)
 	if err != nil {
 		newErrorResponse(c, http.StatusInternalServerError, "Error generating access token")
 		return
 	}
 
-	refreshToken, err := h.serv.GenerateRefreshToken(c, userID)
+	refreshToken, err := h.serv.GenerateRefreshToken(c, tokensData)
 	if err != nil {
 		newErrorResponse(c, http.StatusInternalServerError, "Error generating refresh token")
 		return
 	}
 
-	response := TokenDetails{
+	response := TokenResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 	}
@@ -45,9 +52,13 @@ func (h *Handler) createTokens(c *gin.Context) {
 
 func (h *Handler) refreshTokens(c *gin.Context) {
 	userID := c.Query("user_id")
+	if !isValidUUID(c, userID) {
+		return
+	}
+
 	refreshTokenQuery := c.Query("refresh_token")
-	if userID == "" || refreshTokenQuery == "" {
-		newErrorResponse(c, http.StatusBadRequest, "Missing user_id or refresh_token")
+	if refreshTokenQuery == "" {
+		newErrorResponse(c, http.StatusBadRequest, "Missing refresh_token")
 		return
 	}
 
@@ -57,21 +68,25 @@ func (h *Handler) refreshTokens(c *gin.Context) {
 		return
 	}
 
-	ip := getIP(c)
+	tokensData := &service.TokensData{
+		UserID: userID,
+		TokenID: generateTokenID(),
+		IP: getIP(c),
+	}
 
-	accessToken, err := h.serv.GenerateAccessToken(c, userID, ip)
+	accessToken, err := h.serv.GenerateAccessToken(c, tokensData)
 	if err != nil {
 		newErrorResponse(c, http.StatusInternalServerError, "Error generating access token")
 		return
 	}
 
-	refreshToken, err := h.serv.UpdateRefreshToken(c, userID)
+	refreshToken, err := h.serv.UpdateRefreshToken(c, tokensData)
 	if err != nil {
 		newErrorResponse(c, http.StatusInternalServerError, "Error generating refresh token")
 		return
 	}
 
-	response := TokenDetails{
+	response := TokenResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 	}
@@ -79,6 +94,21 @@ func (h *Handler) refreshTokens(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"response": response,
 	})
+}
+
+func isValidUUID(c *gin.Context, userID string) bool {
+    re := regexp.MustCompile(`^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$`)
+	if !re.MatchString(userID) {
+		if userID == "" {
+			newErrorResponse(c, http.StatusBadRequest, "missing user_id")
+			return false
+		}
+
+		newErrorResponse(c, http.StatusBadRequest, "invalid user_id")
+		return false
+	}
+
+    return true
 }
 
 func getIP(c *gin.Context) string {
@@ -95,4 +125,15 @@ func getIP(c *gin.Context) string {
 		return ip
 	}
 	return host
+}
+
+func generateTokenID() string {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	b := make([]byte, 32)
+
+	for i := range b {
+		b[i] = charset[rand.Intn(len(charset))]
+	}
+
+	return string(b)
 }

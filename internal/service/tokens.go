@@ -2,8 +2,6 @@ package service
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"fmt"
 	"time"
 
@@ -13,13 +11,19 @@ import (
 )
 
 const (
-	secretKey      = "your_secret_key"
-	refreshSecret  = "your_refresh_secret"
-	accessTTL      = time.Hour
+	secretKey     = "your_secret_key"
+	refreshSecret = "your_refresh_secret"
+	accessTTL     = time.Hour
+	refreshTTL    = 7 * 24 * time.Hour
 )
 
-type Claims struct {
+type TokensData struct {
 	UserID  string `json:"user_id"`
+	TokenID string `json:"token_id"`
+	IP      string `json:"ip"`
+}
+
+type TokensClaims struct {
 	IP      string `json:"ip"`
 	jwt.StandardClaims
 }
@@ -34,14 +38,15 @@ func NewTokensService(repo repository.RefreshToken) *TokensService {
 	}
 }
 
-func (s *TokensService) GenerateAccessToken(ctx context.Context, userID, ip string) (string, error) {
-	claims := &Claims{
-		UserID: userID,
-		IP:     ip,
+func (s *TokensService) GenerateAccessToken(ctx context.Context, td *TokensData) (string, error) {
+	claims := &TokensClaims{
+		IP:     td.IP,
 		StandardClaims: jwt.StandardClaims{
+			Subject: td.UserID,
 			ExpiresAt: time.Now().Add(accessTTL).Unix(),
-			IssuedAt: time.Now().Unix(),
+			IssuedAt:  time.Now().Unix(),
 			Issuer:    "tokens_service",
+			Id: td.TokenID,
 		},
 	}
 
@@ -49,27 +54,48 @@ func (s *TokensService) GenerateAccessToken(ctx context.Context, userID, ip stri
 	return token.SignedString([]byte(secretKey))
 }
 
-func (s *TokensService) GenerateRefreshToken(ctx context.Context, userID string) (string, error) {
-	token, hashedToken, err := generateRefreshToken()
+func (s *TokensService) GenerateRefreshToken(ctx context.Context, td *TokensData) (string, error) {
+	var err error
+	refreshToken, err := generateRefreshToken(td)
+	if err != nil {
+		return "", nil
+	}
+
+	_, err = hashRefreshToken(refreshToken) //TODO: hashedRefreshToken
 	if err != nil {
 		return "", err
 	}
 
-	err = s.repo.Create(ctx, string(hashedToken), userID)
+	ok, err := s.repo.Get(ctx, td.UserID) // TODO: возможно стоит добавить ошибку NotFound и использовать проверку через неё
 	if err != nil {
 		return "", err
 	}
 
-	return token, nil
+	// TODO: заменить на хэш
+	if ok == "" {
+		err = s.repo.Update(ctx, refreshToken, td.UserID)
+	} else {
+		err = s.repo.Create(ctx, refreshToken, td.UserID)
+	}
+	if err != nil {
+		return "", err
+	}
+
+	return refreshToken, nil
 }
 
-func (s *TokensService) UpdateRefreshToken(ctx context.Context, userID string) (string, error) {
-	token, hashedToken, err := generateRefreshToken()
+func (s *TokensService) UpdateRefreshToken(ctx context.Context, td *TokensData) (string, error) {
+	token, err := generateRefreshToken(td)
 	if err != nil {
 		return "", err
 	}
 
-	err = s.repo.Update(ctx, string(hashedToken), userID)
+	hashedRefreshToken, err := hashRefreshToken(token)
+	if err != nil {
+		return "", err
+	}
+
+	err = s.repo.Update(ctx, string(hashedRefreshToken), td.UserID)
 	if err != nil {
 		return "", err
 	}
@@ -83,7 +109,7 @@ func (s *TokensService) CheckRefreshToken(ctx context.Context, userID, refreshTo
 		return err
 	}
 
-	err = verifyRefreshToken(refreshToken, storedHash)
+	err = verifyRefreshToken(refreshToken, storedHash) // TODO: изменить проверку
 	if err != nil {
 		return fmt.Errorf("Incorrect refresh token")
 	}
@@ -97,23 +123,36 @@ func verifyRefreshToken(refreshToken string, storedHash string) error {
 	return bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(signedToken))
 }
 
-func generateRefreshToken() (string, string, error) {
-	token := make([]byte, 64)
-	_, err := rand.Read(token)
+func hashRefreshToken(token string) (string, error) {
+	if len(token) > 72 {
+		token = token[:72]
+	}
+
+	hashedToken, err := bcrypt.GenerateFromPassword([]byte(token), bcrypt.DefaultCost)
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 
-	signedToken := fmt.Sprintf("%s.%s", base64.URLEncoding.EncodeToString(token), refreshSecret)
+	return string(hashedToken), nil
+}
 
-	if len(signedToken) > 72 {
-		signedToken = signedToken[:72]
+func generateRefreshToken(td *TokensData) (string, error) {
+	claims := &TokensClaims{
+		IP:      td.IP,
+		StandardClaims: jwt.StandardClaims{
+			Subject: td.UserID,
+			ExpiresAt: time.Now().Add(refreshTTL).Unix(),
+			IssuedAt:  time.Now().Unix(),
+			Issuer:    "tokens_service",
+			Id: td.TokenID,
+		},
 	}
 
-	hashedToken, err := bcrypt.GenerateFromPassword([]byte(signedToken), bcrypt.DefaultCost)
+	token := jwt.NewWithClaims(jwt.SigningMethodHS512, claims)
+	refreshToken, err := token.SignedString([]byte(secretKey))
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 
-	return base64.URLEncoding.EncodeToString(token), string(hashedToken), nil
+	return refreshToken, nil
 }

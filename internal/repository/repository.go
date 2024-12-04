@@ -10,6 +10,7 @@ type RefreshToken interface {
 	Create(ctx context.Context, token, userID string) error
 	Get(ctx context.Context, userID string) (string, error)
 	Update(ctx context.Context, token, userID string) error
+	// CheckUser(ctx context.Context, userID string) (bool, error)
 }
 
 type Repository struct {

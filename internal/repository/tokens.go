@@ -42,3 +42,7 @@ func (r *TokensRepo) Get(ctx context.Context, userID string) (string, error) {
 
 	return hash, err
 }
+
+func (r *TokensRepo) CheckUser(ctx context.Context, userID string) (bool, error) {
+	return false, nil
+}
