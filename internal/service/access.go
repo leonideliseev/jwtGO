@@ -15,7 +15,7 @@ func NewAccessService() *AccessService {
 }
 
 const (
-	accessSecret  = "your_secret_key"
+	accessSecret = "your_secret_key"
 )
 
 type TokenAccessClaims struct {

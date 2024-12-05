@@ -11,13 +11,13 @@ import (
 )
 
 type TokensRepo struct {
-	db *pgxpool.Pool
+	db      *pgxpool.Pool
 	builder squirrel.StatementBuilderType
 }
 
 func NewTokensRepo(db *pgxpool.Pool) *TokensRepo {
 	return &TokensRepo{
-		db: db,
+		db:      db,
 		builder: squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar),
 	}
 }
@@ -27,8 +27,8 @@ const (
 )
 
 const (
-	token_id_F = "token_id"
-	ip_F = "ip"
+	token_id_F   = "token_id"
+	ip_F         = "ip"
 	token_hash_F = "token_hash"
 )
 
@@ -105,7 +105,7 @@ func (r *TokensRepo) Delete(ctx context.Context, tokenID string) error {
 	}
 
 	if commandTag.RowsAffected() == 0 {
-    	return ErrNotFound
+		return ErrNotFound
 	}
 
 	return nil

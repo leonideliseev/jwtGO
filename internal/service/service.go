@@ -30,7 +30,6 @@ type Service struct {
 func New(repo *repository.Repository) *Service {
 	return &Service{
 		RefreshToken: NewRefreshService(repo.RefreshToken),
-		AccessToken: NewAccessService(),
-		// Tokens: NewTokensService(repo.RefreshToken),
+		AccessToken:  NewAccessService(),
 	}
 }

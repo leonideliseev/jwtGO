@@ -92,6 +92,10 @@ func (h *Handler) refreshTokens(c *gin.Context) {
 
 	refreshToken, err := h.serv.RefreshToken.Update(c, wasID, tokensData)
 	if err != nil {
+		if errors.Is(err, service.ErrHasNotToken) {
+			newErrorResponse(c, http.StatusUnauthorized, err.Error())
+			return
+		}
 		newErrorResponse(c, http.StatusInternalServerError, "Error generating refresh token")
 		return
 	}
@@ -134,6 +138,7 @@ func getIP(c *gin.Context) string {
 	if err != nil {
 		return ip
 	}
+
 	return host
 }
 

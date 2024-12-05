@@ -34,7 +34,7 @@ type TokenRefreshClaims struct {
 func (s *RefreshService) Create(ctx context.Context, td *TokensData) (string, error) {
 	refreshToken, err := generateRefreshToken(td)
 	if err != nil {
-		return "", nil
+		return "", err
 	}
 
 	hashedRefreshToken, err := hash(refreshToken)
@@ -50,7 +50,7 @@ func (s *RefreshService) Create(ctx context.Context, td *TokensData) (string, er
 
 	err = s.repo.Create(ctx, data)
 	if err != nil {
-		return "", nil
+		return "", err
 	}
 
 	return refreshToken, nil
@@ -76,7 +76,7 @@ func (s *RefreshService) Update(ctx context.Context, oldTokenID string, td *Toke
 	err = s.repo.Update(ctx, oldTokenID, data)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
-			return "", ErrConcurency
+			return "", ErrHasNotToken
 		}
 
 		return "", err
