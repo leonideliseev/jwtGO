@@ -63,7 +63,7 @@ func (h *Handler) refreshTokens(c *gin.Context) {
 		return
 	}
 
-	wasIP, err := h.serv.ParseRefreshToken(c, userID, refreshTokenQuery)
+	wasID, wasIP, err := h.serv.ParseRefreshToken(c, userID, refreshTokenQuery)
 	if err != nil {
 		if errors.Is(err, service.ErrInternal) {
 			newErrorResponse(c, http.StatusInternalServerError, err.Error())
@@ -75,7 +75,7 @@ func (h *Handler) refreshTokens(c *gin.Context) {
 
 	nowIP := getIP(c)
 	if nowIP != wasIP {
-		// логика отправки сообщения пользователь о смене ip
+		// логика отправки сообщения пользователю о смене ip
 	}
 
 	tokensData := &service.TokensData{
@@ -90,7 +90,7 @@ func (h *Handler) refreshTokens(c *gin.Context) {
 		return
 	}
 
-	refreshToken, err := h.serv.UpdateRefreshToken(c, tokensData)
+	refreshToken, err := h.serv.UpdateRefreshToken(c, wasID, tokensData)
 	if err != nil {
 		newErrorResponse(c, http.StatusInternalServerError, "Error generating refresh token")
 		return

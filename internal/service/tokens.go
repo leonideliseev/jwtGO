@@ -84,7 +84,7 @@ func (s *TokensService) CreateRefreshToken(ctx context.Context, td *TokensData) 
 	return refreshToken, nil
 }
 
-func (s *TokensService) UpdateRefreshToken(ctx context.Context, td *TokensData) (string, error) {
+func (s *TokensService) UpdateRefreshToken(ctx context.Context, oldTokenID string, td *TokensData) (string, error) {
 	refreshToken, err := generateRefreshToken(td)
 	if err != nil {
 		return "", err
@@ -101,7 +101,7 @@ func (s *TokensService) UpdateRefreshToken(ctx context.Context, td *TokensData) 
 		RefreshTokenHash: hashedRefreshToken,
 	}
 
-	err = s.repo.Update(ctx, data)
+	err = s.repo.Update(ctx, oldTokenID, data)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return "", ErrConcurency
@@ -113,7 +113,7 @@ func (s *TokensService) UpdateRefreshToken(ctx context.Context, td *TokensData) 
 	return refreshToken, nil
 }
 
-func (s *TokensService) ParseRefreshToken(ctx context.Context, userID, refreshToken string) (string, error) {
+func (s *TokensService) ParseRefreshToken(ctx context.Context, userID, refreshToken string) (string, string, error) {
 	token, err := jwt.ParseWithClaims(refreshToken, &TokenRefreshClaims{}, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.New("invalid signing method")
@@ -122,41 +122,41 @@ func (s *TokensService) ParseRefreshToken(ctx context.Context, userID, refreshTo
 		return []byte(refreshSecret), nil
 	})
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	claims, ok := token.Claims.(*TokenRefreshClaims)
 	if !ok || !token.Valid {
-		return "", errors.New("invalid token")
+		return "", "", errors.New("invalid token")
 	}
 
 	if claims.Subject != userID {
-		return "", errors.New("user ID does not match")
+		return "", "", errors.New("user ID does not match")
 	}
 
 	if claims.ExpiresAt < time.Now().Unix() {
-		return "", errors.New("refresh token expired")
+		return "", "", errors.New("refresh token expired")
 	}
 
 	storedToken, err := s.repo.Get(ctx, claims.Id)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
-			return "", ErrHasNotToken
+			return "", "", ErrHasNotToken
 		}
 
-		return "", ErrInternal
+		return "", "", ErrInternal
 	}
 
 	requestTokenHask, err := hashRefreshToken(refreshToken)
 	if err != nil {
-		return "", ErrInternal
+		return "", "", ErrInternal
 	}
 
 	if storedToken.RefreshTokenHash != requestTokenHask {
-		return "", errors.New("wrong token")
+		return "", "", errors.New("wrong token")
 	}
 
-	return storedToken.IP, nil
+	return storedToken.TokenID, storedToken.IP, nil
 }
 
 func hashRefreshToken(token string) (string, error) {

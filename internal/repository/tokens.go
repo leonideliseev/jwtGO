@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/Masterminds/squirrel"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/leonideliseev/jwtGO/models"
@@ -11,32 +12,36 @@ import (
 
 type TokensRepo struct {
 	db *pgxpool.Pool
+	builder squirrel.StatementBuilderType
 }
 
 func NewTokensRepo(db *pgxpool.Pool) *TokensRepo {
 	return &TokensRepo{
 		db: db,
+		builder: squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar),
 	}
 }
+
+const (
+	refreshTokensTable = "refresh_tokens"
+)
+
+const (
+	token_id_F = "token_id"
+	ip_F = "ip"
+	token_hash_F = "token_hash"
+)
 
 func (r *TokensRepo) Create(ctx context.Context, refresh *models.Refresh) error {
-	_, err := r.db.Exec(ctx, "INSERT INTO refresh_tokens(token_id, ip, token_hash) VALUES($1, $2, $3)", 
-		refresh.TokenID, refresh.IP, refresh.RefreshTokenHash)
+	q, args, err := r.builder.
+		Insert(refreshTokensTable).
+		Columns(token_id_F, ip_F, token_hash_F).
+		Values(refresh.TokenID, refresh.IP, refresh.RefreshTokenHash).
+		ToSql()
+
+	_, err = r.db.Exec(ctx, q, args)
 	if err != nil {
 		return err
-	}
-	return nil
-}
-
-func (r *TokensRepo) Update(ctx context.Context, refresh *models.Refresh) error {
-	commandTag, err := r.db.Exec(ctx, "UPDATE refresh_tokens SET token_hash=$1, ip=$2 WHERE token_id=$3",
-		refresh.RefreshTokenHash, refresh.IP, refresh.TokenID)
-	if err != nil {
-		return err
-	}
-
-	if commandTag.RowsAffected() == 0 {
-		return ErrNotFound
 	}
 
 	return nil
@@ -54,4 +59,54 @@ func (r *TokensRepo) Get(ctx context.Context, tokenID string) (*models.Refresh, 
 	}
 
 	return &refresh, err
+}
+
+func (r *TokensRepo) Update(ctx context.Context, oldTokenID string, newRefresh *models.Refresh) error {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		if err != nil {
+			tx.Rollback(ctx)
+		}
+	}()
+
+	err = r.Delete(ctx, oldTokenID)
+	if err != nil {
+		return err
+	}
+
+	err = r.Create(ctx, newRefresh)
+	if err != nil {
+		return err
+	}
+
+	if err = tx.Commit(ctx); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *TokensRepo) Delete(ctx context.Context, tokenID string) error {
+	q, args, err := r.builder.
+		Delete(refreshTokensTable).
+		Where(squirrel.Eq{token_id_F: tokenID}).
+		ToSql()
+	if err != nil {
+		return err
+	}
+
+	commandTag, err := r.db.Exec(ctx, q, args...)
+	if err != nil {
+		return err
+	}
+
+	if commandTag.RowsAffected() == 0 {
+    	return ErrNotFound
+	}
+
+	return nil
 }
