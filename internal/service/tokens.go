@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt"
@@ -13,7 +12,7 @@ import (
 )
 
 const (
-	secretKey     = "your_secret_key"
+	accessSecret  = "your_secret_key"
 	refreshSecret = "your_refresh_secret"
 	accessTTL     = time.Hour
 	refreshTTL    = 7 * 24 * time.Hour
@@ -26,7 +25,7 @@ type TokensData struct {
 }
 
 type TokenAccessClaims struct {
-	IP      string `json:"ip"`
+	IP string `json:"ip"`
 	jwt.StandardClaims
 }
 
@@ -44,55 +43,41 @@ func NewTokensService(repo repository.RefreshToken) *TokensService {
 	}
 }
 
-func (s *TokensService) GenerateAccessToken(ctx context.Context, td *TokensData) (string, error) {
+func (s *TokensService) CreateAccessToken(ctx context.Context, td *TokensData) (string, error) {
 	claims := &TokenAccessClaims{
-		IP:     td.IP,
+		IP: td.IP,
 		StandardClaims: jwt.StandardClaims{
-			Subject: td.UserID,
+			Subject:   td.UserID,
 			ExpiresAt: time.Now().Add(accessTTL).Unix(),
 			IssuedAt:  time.Now().Unix(),
 			Issuer:    "tokens_service",
-			Id: td.TokenID,
+			Id:        td.TokenID,
 		},
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS512, claims)
-	return token.SignedString([]byte(secretKey))
+	return token.SignedString([]byte(accessSecret))
 }
 
-func (s *TokensService) GenerateRefreshToken(ctx context.Context, td *TokensData) (string, error) {
-	var err error
+func (s *TokensService) CreateRefreshToken(ctx context.Context, td *TokensData) (string, error) {
 	refreshToken, err := generateRefreshToken(td)
 	if err != nil {
 		return "", nil
 	}
 
-	hashedRefreshToken, err := hashRefreshToken(refreshToken) //TODO: проверить хэш-функцию
+	hashedRefreshToken, err := hashRefreshToken(refreshToken)
 	if err != nil {
 		return "", err
 	}
 
 	data := &models.Refresh{
-		UserID: td.UserID,
-		IP: td.IP,
+		TokenID:          td.TokenID,
+		IP:               td.IP,
 		RefreshTokenHash: hashedRefreshToken,
 	}
 
-	_, err = s.repo.Get(ctx, td.UserID)
-	var errRepo error
-	switch {
-	case errors.Is(err, repository.ErrNotFound):
-		errRepo = s.repo.Create(ctx, data)
-	case err == nil:
-		errRepo = s.repo.Update(ctx, data)
-	default:
-		return "", nil
-	}
-	if errRepo != nil {
-		if errors.Is(errRepo, repository.ErrNotFound) {
-			return "", ErrConcurency
-		}
-
+	err = s.repo.Create(ctx, data)
+	if err != nil {
 		return "", nil
 	}
 
@@ -100,54 +85,78 @@ func (s *TokensService) GenerateRefreshToken(ctx context.Context, td *TokensData
 }
 
 func (s *TokensService) UpdateRefreshToken(ctx context.Context, td *TokensData) (string, error) {
-	token, err := generateRefreshToken(td)
+	refreshToken, err := generateRefreshToken(td)
 	if err != nil {
 		return "", err
 	}
 
-	hashedRefreshToken, err := hashRefreshToken(token)
+	hashedRefreshToken, err := hashRefreshToken(refreshToken)
 	if err != nil {
 		return "", err
 	}
 
 	data := &models.Refresh{
-		UserID: td.UserID,
-		IP: td.IP,
+		TokenID:          td.TokenID,
+		IP:               td.IP,
 		RefreshTokenHash: hashedRefreshToken,
 	}
 
 	err = s.repo.Update(ctx, data)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
-			return "", HasNotToken
+			return "", ErrConcurency
 		}
 
 		return "", err
 	}
 
-	return token, nil
+	return refreshToken, nil
 }
 
-func (s *TokensService) CheckRefreshToken(ctx context.Context, userID, refreshToken string) error {
-	storedHash, err := s.repo.Get(ctx, userID)
+func (s *TokensService) ParseRefreshToken(ctx context.Context, userID, refreshToken string) (string, error) {
+	token, err := jwt.ParseWithClaims(refreshToken, &TokenRefreshClaims{}, func(t *jwt.Token) (interface{}, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, errors.New("invalid signing method")
+		}
+
+		return []byte(refreshSecret), nil
+	})
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	err = verifyRefreshToken(refreshToken, storedHash)
-	if err != nil {
-		return fmt.Errorf("Incorrect refresh token")
+	claims, ok := token.Claims.(*TokenRefreshClaims)
+	if !ok || !token.Valid {
+		return "", errors.New("invalid token")
 	}
 
-	return nil
-}
+	if claims.Subject != userID {
+		return "", errors.New("user ID does not match")
+	}
 
-// TODO: проверка должна быть на равенство с хэшем и изменился ли ip
-func verifyRefreshToken(refreshToken string, storedHash *models.Refresh) error {
-	return nil
-	/*signedToken := fmt.Sprintf("%s.%s", refreshToken, refreshSecret)
+	if claims.ExpiresAt < time.Now().Unix() {
+		return "", errors.New("refresh token expired")
+	}
 
-	return bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(signedToken))*/
+	storedToken, err := s.repo.Get(ctx, claims.Id)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return "", ErrHasNotToken
+		}
+
+		return "", ErrInternal
+	}
+
+	requestTokenHask, err := hashRefreshToken(refreshToken)
+	if err != nil {
+		return "", ErrInternal
+	}
+
+	if storedToken.RefreshTokenHash != requestTokenHask {
+		return "", errors.New("wrong token")
+	}
+
+	return storedToken.IP, nil
 }
 
 func hashRefreshToken(token string) (string, error) {
@@ -166,16 +175,16 @@ func hashRefreshToken(token string) (string, error) {
 func generateRefreshToken(td *TokensData) (string, error) {
 	claims := &TokenRefreshClaims{
 		StandardClaims: jwt.StandardClaims{
-			Subject: td.UserID,
+			Subject:   td.UserID,
 			ExpiresAt: time.Now().Add(refreshTTL).Unix(),
 			IssuedAt:  time.Now().Unix(),
 			Issuer:    "tokens_service",
-			Id: td.TokenID,
+			Id:        td.TokenID,
 		},
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS512, claims)
-	refreshToken, err := token.SignedString([]byte(secretKey))
+	refreshToken, err := token.SignedString([]byte(refreshSecret))
 	if err != nil {
 		return "", err
 	}

@@ -7,10 +7,10 @@ import (
 )
 
 type Tokens interface {
-	GenerateAccessToken(ctx context.Context, td *TokensData) (string, error)
-	GenerateRefreshToken(ctx context.Context, td *TokensData) (string, error)
+	CreateAccessToken(ctx context.Context, td *TokensData) (string, error)
+	CreateRefreshToken(ctx context.Context, td *TokensData) (string, error)
 	UpdateRefreshToken(ctx context.Context, td *TokensData) (string, error)
-	CheckRefreshToken(ctx context.Context, userID, refreshToken string) error
+	ParseRefreshToken(ctx context.Context, userID, refreshToken string) (string, error)
 }
 
 type Service struct {

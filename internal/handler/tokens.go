@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"math/rand"
 	"net"
 	"net/http"
@@ -28,13 +29,13 @@ func (h *Handler) createTokens(c *gin.Context) {
 		IP: getIP(c),
 	}
 
-	accessToken, err := h.serv.GenerateAccessToken(c, tokensData)
+	accessToken, err := h.serv.CreateAccessToken(c, tokensData)
 	if err != nil {
 		newErrorResponse(c, http.StatusInternalServerError, "Error generating access token")
 		return
 	}
 
-	refreshToken, err := h.serv.GenerateRefreshToken(c, tokensData)
+	refreshToken, err := h.serv.CreateRefreshToken(c, tokensData)
 	if err != nil {
 		newErrorResponse(c, http.StatusInternalServerError, "Error generating refresh token")
 		return
@@ -62,19 +63,28 @@ func (h *Handler) refreshTokens(c *gin.Context) {
 		return
 	}
 
-	err := h.serv.CheckRefreshToken(c, userID, refreshTokenQuery)
+	wasIP, err := h.serv.ParseRefreshToken(c, userID, refreshTokenQuery)
 	if err != nil {
-		newErrorResponse(c, http.StatusBadRequest, err.Error())
+		if errors.Is(err, service.ErrInternal) {
+			newErrorResponse(c, http.StatusInternalServerError, err.Error())
+			return
+		}
+		newErrorResponse(c, http.StatusUnauthorized, err.Error())
 		return
+	}
+
+	nowIP := getIP(c)
+	if nowIP != wasIP {
+		// логика отправки сообщения пользователь о смене ip
 	}
 
 	tokensData := &service.TokensData{
 		UserID: userID,
 		TokenID: generateTokenID(),
-		IP: getIP(c),
+		IP: nowIP,
 	}
 
-	accessToken, err := h.serv.GenerateAccessToken(c, tokensData)
+	accessToken, err := h.serv.CreateAccessToken(c, tokensData)
 	if err != nil {
 		newErrorResponse(c, http.StatusInternalServerError, "Error generating access token")
 		return
