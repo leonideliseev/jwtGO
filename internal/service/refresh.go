@@ -2,7 +2,10 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt"
@@ -21,9 +24,11 @@ func NewRefreshService(repo repository.RefreshToken) *RefreshService {
 	}
 }
 
+var (
+	refreshSecret = os.Getenv("REFRESH_SECRET")
+)
+
 const (
-	refreshSecret = "your_refresh_secret"
-	accessTTL     = time.Hour
 	refreshTTL    = 7 * 24 * time.Hour
 )
 
@@ -119,12 +124,13 @@ func (s *RefreshService) Parse(ctx context.Context, userID, refreshToken string)
 		return "", "", ErrInternal
 	}
 
-	requestTokenHask, err := hash(refreshToken)
+	stored, err := hash(refreshToken)
 	if err != nil {
 		return "", "", ErrInternal
 	}
 
-	if storedToken.RefreshTokenHash != requestTokenHask {
+	received := storedToken.RefreshTokenHash
+	if err := bcrypt.CompareHashAndPassword([]byte(stored), []byte(received)); err != nil {
 		return "", "", errors.New("wrong token")
 	}
 
@@ -132,11 +138,11 @@ func (s *RefreshService) Parse(ctx context.Context, userID, refreshToken string)
 }
 
 func hash(token string) (string, error) {
-	if len(token) > 72 {
-		token = token[:72]
-	}
+	// get fixed len <= 72, for use bcrypt
+	sha256Hash := sha256.Sum256([]byte(token))
+	sha256Hex := hex.EncodeToString(sha256Hash[:])
 
-	hashedToken, err := bcrypt.GenerateFromPassword([]byte(token), bcrypt.DefaultCost)
+	hashedToken, err := bcrypt.GenerateFromPassword([]byte(sha256Hex), bcrypt.DefaultCost)
 	if err != nil {
 		return "", err
 	}

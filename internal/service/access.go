@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt"
@@ -14,8 +15,12 @@ func NewAccessService() *AccessService {
 	return &AccessService{}
 }
 
+var (
+	accessSecret = os.Getenv("ACCESS_SECRET")
+)
+
 const (
-	accessSecret = "your_secret_key"
+	accessTTL     = time.Hour
 )
 
 type TokenAccessClaims struct {
