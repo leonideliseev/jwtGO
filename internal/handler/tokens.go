@@ -29,13 +29,13 @@ func (h *Handler) createTokens(c *gin.Context) {
 		IP: getIP(c),
 	}
 
-	accessToken, err := h.serv.CreateAccessToken(c, tokensData)
+	accessToken, err := h.serv.AccessToken.Create(c, tokensData)
 	if err != nil {
 		newErrorResponse(c, http.StatusInternalServerError, "Error generating access token")
 		return
 	}
 
-	refreshToken, err := h.serv.CreateRefreshToken(c, tokensData)
+	refreshToken, err := h.serv.RefreshToken.Create(c, tokensData)
 	if err != nil {
 		newErrorResponse(c, http.StatusInternalServerError, "Error generating refresh token")
 		return
@@ -63,7 +63,7 @@ func (h *Handler) refreshTokens(c *gin.Context) {
 		return
 	}
 
-	wasID, wasIP, err := h.serv.ParseRefreshToken(c, userID, refreshTokenQuery)
+	wasID, wasIP, err := h.serv.RefreshToken.Parse(c, userID, refreshTokenQuery)
 	if err != nil {
 		if errors.Is(err, service.ErrInternal) {
 			newErrorResponse(c, http.StatusInternalServerError, err.Error())
@@ -84,13 +84,13 @@ func (h *Handler) refreshTokens(c *gin.Context) {
 		IP: nowIP,
 	}
 
-	accessToken, err := h.serv.CreateAccessToken(c, tokensData)
+	accessToken, err := h.serv.AccessToken.Create(c, tokensData)
 	if err != nil {
 		newErrorResponse(c, http.StatusInternalServerError, "Error generating access token")
 		return
 	}
 
-	refreshToken, err := h.serv.UpdateRefreshToken(c, wasID, tokensData)
+	refreshToken, err := h.serv.RefreshToken.Update(c, wasID, tokensData)
 	if err != nil {
 		newErrorResponse(c, http.StatusInternalServerError, "Error generating refresh token")
 		return
