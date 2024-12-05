@@ -1,20 +1,9 @@
 package main
 
-import (
-	"fmt"
-
-	"github.com/leonideliseev/jwtGO/config"
-)
+import "github.com/leonideliseev/jwtGO/internal/pkg/app"
 
 func main() {
-	err := config.InitConfig()
-	if err != nil {
-		panic(fmt.Sprintf("error init configs: %s", err.Error()))
-	}
+	ap := app.NewApp()
 
-	err = config.LoadEnv()
-	if err != nil {
-		panic(fmt.Sprintf("error loading env: %s", err.Error()))
-	}
-
+	ap.Run()
 }

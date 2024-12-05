@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+	token_id TEXT PRIMARY KEY,
+	ip TEXT NOT NULL,
+	token_hash TEXT NOT NULL,
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
