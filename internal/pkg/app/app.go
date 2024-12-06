@@ -13,7 +13,7 @@ import (
 	"github.com/leonideliseev/jwtGO/internal/handler"
 	"github.com/leonideliseev/jwtGO/internal/repository"
 	"github.com/leonideliseev/jwtGO/internal/service"
-	"github.com/spf13/viper"
+	"github.com/leonideliseev/jwtGO/pkg/postgresql"
 )
 
 type Closer interface {
@@ -21,6 +21,8 @@ type Closer interface {
 }
 
 type App struct {
+	cfg *config.Config
+
 	srv *http.Server
 	conn *pgxpool.Pool
 
@@ -34,22 +36,26 @@ type App struct {
 func NewApp() (*App, error) {
 	app := &App{}
 
-	var err error
-	err = config.InitConfig()
-	if err != nil {
-		return nil, err
-	}
-	err = config.LoadEnv()
+	cfg, err := config.New()
 	if err != nil {
 		return nil, err
 	}
 
-	err = app.initDBConn()
+	app.cfg = cfg
+
+	err = app.initDBConn(postgresql.Config{
+		Host: cfg.Postgresql.Host,
+		Port: cfg.Postgresql.Port,
+		Username: cfg.Postgresql.User,
+		Password: cfg.Postgresql.Password,
+		DBName: cfg.Postgresql.Database,
+		SSLMode: cfg.Postgresql.SSLMode,
+	})
 	if err != nil {
 		return nil, err
 	}
 	app.initAppCore()
-	app.initServer()
+	app.initServer(cfg.HTTP)
 	app.initShutdown()
 
 	return app, nil
@@ -62,7 +68,7 @@ func (a *App) Run() {
 		}
 	}()
 
-	log.Printf("JWT app running on %s:%s",  viper.GetString("http.host"), viper.GetString("http.port"))
+	log.Printf("JWT app running on %s:%s", a.cfg.HTTP.Host, a.cfg.HTTP.Port)
 
 	<-a.quit
 
@@ -74,15 +80,15 @@ func (a *App) Run() {
 
 func (a *App) initAppCore() {
 	a.repo = repository.New(a.conn)
-	a.serv = service.New(a.repo)
+	a.serv = service.New(a.repo, a.cfg.JWT)
 	a.hand = handler.New(a.serv)
 }
 
-func (a *App) initServer() {
+func (a *App) initServer(cfg config.HTTP) {
 	router := a.hand.InitRoutes()
 
 	a.srv = &http.Server{
-		Addr:    fmt.Sprintf("%s:%s", viper.GetString("http.host"), viper.GetString("http.port")),
+		Addr:    fmt.Sprintf("%s:%s", cfg.Host, cfg.Port),
 		Handler: router,
 	}
 }

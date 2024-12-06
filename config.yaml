@@ -1,0 +1,9 @@
+http:
+  host: "0.0.0.0"
+  port: "8080"
+postgresql:
+  user: "postgres"
+  host: "0.0.0.0"
+  port: "5432"
+  database: "jwt_app"
+  ssl_mode: "disable"

@@ -2,26 +2,23 @@ package service
 
 import (
 	"context"
-	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt"
+	"github.com/leonideliseev/jwtGO/config"
 )
 
 type AccessService struct {
+	accessSecret string
+	accessTTL    time.Duration
 }
 
-func NewAccessService() *AccessService {
-	return &AccessService{}
+func NewAccessService(cfg config.JWT) *AccessService {
+	return &AccessService{
+		accessSecret: cfg.AccessSignKey,
+		accessTTL:    cfg.AccessTokenTTL,
+	}
 }
-
-var (
-	accessSecret = os.Getenv("ACCESS_SECRET")
-)
-
-const (
-	accessTTL     = time.Hour
-)
 
 type TokenAccessClaims struct {
 	IP string `json:"ip"`
@@ -33,7 +30,7 @@ func (s *AccessService) Create(ctx context.Context, td *TokensData) (string, err
 		IP: td.IP,
 		StandardClaims: jwt.StandardClaims{
 			Subject:   td.UserID,
-			ExpiresAt: time.Now().Add(accessTTL).Unix(),
+			ExpiresAt: time.Now().Add(s.accessTTL).Unix(),
 			IssuedAt:  time.Now().Unix(),
 			Issuer:    "tokens_service",
 			Id:        td.TokenID,
@@ -41,5 +38,5 @@ func (s *AccessService) Create(ctx context.Context, td *TokensData) (string, err
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS512, claims)
-	return token.SignedString([]byte(accessSecret))
+	return token.SignedString([]byte(s.accessSecret))
 }

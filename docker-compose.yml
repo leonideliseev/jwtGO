@@ -1,0 +1,36 @@
+services:
+
+  postgres:
+    container_name: postgres
+    image: postgres:16.3
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: qwerty
+      POSTGRES_DB: jwt_app
+    volumes:
+      - ./app_pg_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  service:
+    container_name: service
+    build:
+      context: .
+    restart: always
+    env_file:
+      - .env
+    environment:
+      HTTP_HOST: 0.0.0.0
+      HTTP_PORT: 8080
+      PG_USER: postgres
+      PG_PASSWORD: qwerty
+      PG_HOST: postgres
+      PG_PORT: 5432
+      PG_DATABASE: jwt_app
+      PG_SSL: disable
+    volumes:
+      - ./config.yaml:/app/config.yaml
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres

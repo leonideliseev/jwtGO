@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 
+	"github.com/leonideliseev/jwtGO/config"
 	"github.com/leonideliseev/jwtGO/internal/repository"
 )
 
@@ -27,9 +28,9 @@ type Service struct {
 	AccessToken
 }
 
-func New(repo *repository.Repository) *Service {
+func New(repo *repository.Repository, cfg config.JWT) *Service {
 	return &Service{
-		RefreshToken: NewRefreshService(repo.RefreshToken),
-		AccessToken:  NewAccessService(),
+		RefreshToken: NewRefreshService(repo.RefreshToken, cfg),
+		AccessToken:  NewAccessService(cfg),
 	}
 }

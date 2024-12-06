@@ -5,10 +5,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt"
+	"github.com/leonideliseev/jwtGO/config"
 	"github.com/leonideliseev/jwtGO/internal/repository"
 	"github.com/leonideliseev/jwtGO/models"
 	"golang.org/x/crypto/bcrypt"
@@ -16,28 +16,26 @@ import (
 
 type RefreshService struct {
 	repo repository.RefreshToken
+
+	refreshSecret string
+	refreshTTL    time.Duration
 }
 
-func NewRefreshService(repo repository.RefreshToken) *RefreshService {
+func NewRefreshService(repo repository.RefreshToken, cfg config.JWT) *RefreshService {
 	return &RefreshService{
 		repo: repo,
+
+		refreshSecret: cfg.RefreshSignKey,
+		refreshTTL: cfg.RefreshTokenTTL,
 	}
 }
-
-var (
-	refreshSecret = os.Getenv("REFRESH_SECRET")
-)
-
-const (
-	refreshTTL    = 7 * 24 * time.Hour
-)
 
 type TokenRefreshClaims struct {
 	jwt.StandardClaims
 }
 
 func (s *RefreshService) Create(ctx context.Context, td *TokensData) (string, error) {
-	refreshToken, err := generateRefreshToken(td)
+	refreshToken, err := s.generateRefreshToken(td)
 	if err != nil {
 		return "", err
 	}
@@ -62,7 +60,7 @@ func (s *RefreshService) Create(ctx context.Context, td *TokensData) (string, er
 }
 
 func (s *RefreshService) Update(ctx context.Context, oldTokenID string, td *TokensData) (string, error) {
-	refreshToken, err := generateRefreshToken(td)
+	refreshToken, err := s.generateRefreshToken(td)
 	if err != nil {
 		return "", err
 	}
@@ -96,7 +94,7 @@ func (s *RefreshService) Parse(ctx context.Context, userID, refreshToken string)
 			return nil, errors.New("invalid signing method")
 		}
 
-		return []byte(refreshSecret), nil
+		return []byte(s.refreshSecret), nil
 	})
 	if err != nil {
 		return "", "", err
@@ -157,11 +155,11 @@ func hash(token string) (string, error) {
 	return string(hashedToken), nil
 }
 
-func generateRefreshToken(td *TokensData) (string, error) {
+func (s *RefreshService) generateRefreshToken(td *TokensData) (string, error) {
 	claims := &TokenRefreshClaims{
 		StandardClaims: jwt.StandardClaims{
 			Subject:   td.UserID,
-			ExpiresAt: time.Now().Add(refreshTTL).Unix(),
+			ExpiresAt: time.Now().Add(s.refreshTTL).Unix(),
 			IssuedAt:  time.Now().Unix(),
 			Issuer:    "tokens_service",
 			Id:        td.TokenID,
@@ -169,5 +167,5 @@ func generateRefreshToken(td *TokensData) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS512, claims)
-	return token.SignedString([]byte(refreshSecret))
+	return token.SignedString([]byte(s.refreshSecret))
 }

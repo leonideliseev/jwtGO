@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/golang-jwt/jwt"
+	"github.com/leonideliseev/jwtGO/config"
 	"github.com/leonideliseev/jwtGO/internal/service"
 	"github.com/stretchr/testify/assert"
 )
@@ -15,7 +16,12 @@ var (
 )
 
 func TestAccessService_Create(t *testing.T) {
-	s := service.NewAccessService()
+	cfg, err := config.New()
+	if err != nil {
+		return
+	}
+
+	s := service.NewAccessService(cfg.JWT)
 
 	type args struct {
 		ctx context.Context

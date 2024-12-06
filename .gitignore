@@ -2,3 +2,5 @@
 .vscode
 
 *.env
+
+app_pg_data
