@@ -3,6 +3,7 @@ package postgresql
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -20,6 +21,8 @@ func CreateDatabaseIfNotExists(conn *pgxpool.Pool, dbName string) error {
 			return fmt.Errorf("failed to create database %v", err)
 		}
 	}
+
+	log.Printf("database created %s", dbName)
 
 	return nil
 }

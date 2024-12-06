@@ -31,7 +31,6 @@ func Migrate(fs *embed.FS, cfg *Config) error {
 	}
 
 	err = instance.Up()
-
 	if err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return err
 	}

@@ -124,17 +124,24 @@ func (s *RefreshService) Parse(ctx context.Context, userID, refreshToken string)
 		return "", "", ErrInternal
 	}
 
-	stored, err := hash(refreshToken)
-	if err != nil {
-		return "", "", ErrInternal
-	}
-
-	received := storedToken.RefreshTokenHash
-	if err := bcrypt.CompareHashAndPassword([]byte(stored), []byte(received)); err != nil {
-		return "", "", errors.New("wrong token")
+	stored := storedToken.RefreshTokenHash
+	if err := compareHash(stored, refreshToken); err != nil {
+		return "", "", err
 	}
 
 	return storedToken.TokenID, storedToken.IP, nil
+}
+
+func compareHash(hashedToken string, inputToken string) error {
+    sha256Hash := sha256.Sum256([]byte(inputToken))
+    sha256Hex := hex.EncodeToString(sha256Hash[:])
+
+    err := bcrypt.CompareHashAndPassword([]byte(hashedToken), []byte(sha256Hex))
+    if err != nil {
+        return err
+    }
+
+    return nil
 }
 
 func hash(token string) (string, error) {

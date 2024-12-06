@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"fmt"
 	"math/rand"
 	"net"
 	"net/http"
@@ -37,7 +38,7 @@ func (h *Handler) createTokens(c *gin.Context) {
 
 	refreshToken, err := h.serv.RefreshToken.Create(c, tokensData)
 	if err != nil {
-		newErrorResponse(c, http.StatusInternalServerError, "Error generating refresh token")
+		newErrorResponse(c, http.StatusInternalServerError, fmt.Sprintf("Error generating refresh token: %v", err))
 		return
 	}
 

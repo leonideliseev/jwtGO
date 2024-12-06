@@ -55,7 +55,7 @@ func NewApp() (*App, error) {
 	return app, nil
 }
 
-func (a *App) Run() error {
+func (a *App) Run() {
 	go func() {
 		if err := a.srv.ListenAndServe(); err != nil {
 			log.Fatalf("error running server: %s", err.Error())
@@ -67,11 +67,9 @@ func (a *App) Run() error {
 	<-a.quit
 
 	if err := a.srv.Close(); err != nil {
-		return err
+		log.Print("error close server")
 	}
 	a.conn.Close()
-
-	return nil
 }
 
 func (a *App) initAppCore() {

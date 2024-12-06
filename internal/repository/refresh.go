@@ -38,8 +38,11 @@ func (r *TokensRepo) Create(ctx context.Context, refresh *models.Refresh) error 
 		Columns(token_id_F, ip_F, token_hash_F).
 		Values(refresh.TokenID, refresh.IP, refresh.RefreshTokenHash).
 		ToSql()
+	if err != nil {
+		return err
+	}
 
-	_, err = r.db.Exec(ctx, q, args)
+	_, err = r.db.Exec(ctx, q, args...)
 	if err != nil {
 		return err
 	}
@@ -48,8 +51,19 @@ func (r *TokensRepo) Create(ctx context.Context, refresh *models.Refresh) error 
 }
 
 func (r *TokensRepo) Get(ctx context.Context, tokenID string) (*models.Refresh, error) {
+	q, args, err := r.builder.
+		Select(token_id_F, ip_F, token_hash_F).
+		From(refreshTokensTable).
+		Where(squirrel.Eq{token_id_F: tokenID}).
+		ToSql()
+	if err != nil {
+		return nil, err
+	}
+
+	row := r.db.QueryRow(ctx, q, args...)
+
 	var refresh models.Refresh
-	err := r.db.QueryRow(ctx, "SELECT token_hash FROM refresh_tokens WHERE token_id=$1", tokenID).Scan(&refresh)
+	err = row.Scan(&refresh.TokenID, &refresh.IP, &refresh.RefreshTokenHash)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -58,7 +72,7 @@ func (r *TokensRepo) Get(ctx context.Context, tokenID string) (*models.Refresh, 
 		return nil, err
 	}
 
-	return &refresh, err
+	return &refresh, nil
 }
 
 func (r *TokensRepo) Update(ctx context.Context, oldTokenID string, newRefresh *models.Refresh) error {
