@@ -8,7 +8,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-func (a *App) initDBConn() {
+func (a *App) initDBConn() error {
 	config := postgresql.Config{
 		Host:     viper.GetString("db.host"),
 		Port:     viper.GetString("db.port"),
@@ -22,19 +22,25 @@ func (a *App) initDBConn() {
 	configTest.DBName = "postgres"
 	connTest, err := postgresql.ConnWithPgxPool(configTest)
 	if err != nil {
-		a.logger.WithError(err).Fatal("error connect to database")
+		return err
 	}
 	defer connTest.Close()
 
-	postgresql.CreateDatabaseIfNotExists(connTest, viper.GetString("db.dbname"), a.logger)
+	err = postgresql.CreateDatabaseIfNotExists(connTest, viper.GetString("db.dbname"))
+	if err != nil {
+		panic(err)
+	}
 
 	conn, err := postgresql.ConnWithPgxPool(config)
 	if err != nil {
-		a.logger.WithError(err).Fatal("error connect to database")
+		return err
 	}
 
-	postgresql.Migrate(a.logger, &schema.DB, &config)
-	a.logger.Info("database ready")
+	err = postgresql.Migrate(&schema.DB, &config)
+	if err != nil {
+		panic(err)
+	}
 
 	a.conn = conn
+	return nil
 }

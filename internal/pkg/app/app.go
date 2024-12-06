@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -12,7 +13,6 @@ import (
 	"github.com/leonideliseev/jwtGO/internal/handler"
 	"github.com/leonideliseev/jwtGO/internal/repository"
 	"github.com/leonideliseev/jwtGO/internal/service"
-	"github.com/leonideliseev/jwtGO/pkg/logging"
 	"github.com/spf13/viper"
 )
 
@@ -21,8 +21,6 @@ type Closer interface {
 }
 
 type App struct {
-	logger *logging.Logger
-
 	srv *http.Server
 	conn *pgxpool.Pool
 
@@ -33,41 +31,47 @@ type App struct {
 	quit chan os.Signal
 }
 
-func NewApp() *App {
+func NewApp() (*App, error) {
 	app := &App{}
 
-	app.logger = logging.GetLogger()
-	app.logger.Info("log writing started")
+	var err error
+	err = config.InitConfig()
+	if err != nil {
+		return nil, err
+	}
+	err = config.LoadEnv()
+	if err != nil {
+		return nil, err
+	}
 
-	config.InitConfig()
-	config.LoadEnv()
-
-	app.initDBConn()
+	err = app.initDBConn()
+	if err != nil {
+		return nil, err
+	}
 	app.initAppCore()
 	app.initServer()
 	app.initShutdown()
 
-	return app
+	return app, nil
 }
 
-func (a *App) Run() {
+func (a *App) Run() error {
 	go func() {
 		if err := a.srv.ListenAndServe(); err != nil {
-			a.logger.Fatalf("error running server: %s", err.Error())
+			log.Fatalf("error running server: %s", err.Error())
 		}
 	}()
 
-	a.logger.Info("JWT App started")
+	log.Printf("JWT app running on %s:%s",  viper.GetString("http.host"), viper.GetString("http.port"))
 
 	<-a.quit
-	a.logger.Warn("JWT App shutting down")
 
 	if err := a.srv.Close(); err != nil {
-		a.logger.Errorf("error occurred on server shutting down: %s", err.Error())
+		return err
 	}
 	a.conn.Close()
 
-	a.logger.Info("JWT App stopped")
+	return nil
 }
 
 func (a *App) initAppCore() {

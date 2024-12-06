@@ -1,9 +1,19 @@
 package main
 
-import "github.com/leonideliseev/jwtGO/internal/pkg/app"
+import (
+	"log"
+
+	"github.com/leonideliseev/jwtGO/internal/pkg/app"
+)
 
 func main() {
-	ap := app.NewApp()
+	ap, err := app.NewApp()
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	ap.Run()
+	err = ap.Run()
+	if err != nil {
+		log.Fatal(err)
+	}
 }
