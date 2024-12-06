@@ -162,10 +162,5 @@ func generateRefreshToken(td *TokensData) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS512, claims)
-	refreshToken, err := token.SignedString([]byte(refreshSecret))
-	if err != nil {
-		return "", err
-	}
-
-	return refreshToken, nil
+	return token.SignedString([]byte(refreshSecret))
 }
