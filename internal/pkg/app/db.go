@@ -16,7 +16,7 @@ func (a *App) initDBConn(cfg postgresql.Config) error {
 
 	err = postgresql.CreateDatabaseIfNotExists(connTest, cfg.DBName)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	conn, err := postgresql.ConnWithPgxPool(cfg)
@@ -26,7 +26,7 @@ func (a *App) initDBConn(cfg postgresql.Config) error {
 
 	err = postgresql.Migrate(&schema.DB, &cfg)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	a.conn = conn

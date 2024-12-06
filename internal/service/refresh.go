@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"time"
@@ -56,6 +57,7 @@ func (s *RefreshService) Create(ctx context.Context, td *TokensData) (string, er
 		return "", err
 	}
 
+	refreshToken = base64.StdEncoding.EncodeToString([]byte(refreshToken))
 	return refreshToken, nil
 }
 
@@ -85,10 +87,18 @@ func (s *RefreshService) Update(ctx context.Context, oldTokenID string, td *Toke
 		return "", err
 	}
 
+	refreshToken = base64.StdEncoding.EncodeToString([]byte(refreshToken))
 	return refreshToken, nil
 }
 
 func (s *RefreshService) Parse(ctx context.Context, userID, refreshToken string) (string, string, error) {
+	decodedBytes, err := base64.StdEncoding.DecodeString(refreshToken)
+	if err != nil {
+		return "", "", err
+	}
+
+	refreshToken = string(decodedBytes)
+
 	token, err := jwt.ParseWithClaims(refreshToken, &TokenRefreshClaims{}, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.New("invalid signing method")

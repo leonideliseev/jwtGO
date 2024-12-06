@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -63,7 +64,7 @@ func NewApp() (*App, error) {
 
 func (a *App) Run() {
 	go func() {
-		if err := a.srv.ListenAndServe(); err != nil {
+		if err := a.srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("error running server: %s", err.Error())
 		}
 	}()
@@ -72,10 +73,14 @@ func (a *App) Run() {
 
 	<-a.quit
 
+	log.Print("JWT app shutting down")
+
 	if err := a.srv.Close(); err != nil {
 		log.Print("error close server")
 	}
 	a.conn.Close()
+
+	log.Print("JWT app stopped")
 }
 
 func (a *App) initAppCore() {
