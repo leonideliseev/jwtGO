@@ -1,7 +1,7 @@
 http:
   host: "0.0.0.0"
 postgresql:
-  host: "0.0.0.0"
+  host: "postgres"
   port: "5432"
   database: "jwt_app"
   ssl_mode: "disable"
